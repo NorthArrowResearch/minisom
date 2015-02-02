@@ -1,4 +1,4 @@
-from numpy import sqrt,sqrt,array,unravel_index,nditer,linalg,random,subtract,power,exp,pi,zeros,arange,outer,meshgrid
+from numpy import sqrt,sqrt,array,unravel_index,nditer,linalg,random,subtract,ma,power,exp,pi,zeros,arange,outer,meshgrid
 from collections import defaultdict
 from warnings import warn
 
@@ -37,9 +37,12 @@ class MiniSom:
 
     def _activate(self,x):
         """ Updates matrix activation_map, in this matrix the element i,j is the response of the neuron i,j to x """
+        # The Mask will take care of nodatavalues for rasters
         s = subtract(x,self.weights) # x - w
         it = nditer(self.activation_map, flags=['multi_index'])
         while not it.finished:
+            # TODO: Figure out if this is the problem
+            a = self.activation_map[it.multi_index]
             self.activation_map[it.multi_index] = linalg.norm(s[it.multi_index]) # || x - w ||
             it.iternext()
 
@@ -90,25 +93,47 @@ class MiniSom:
     def quantization(self,data):
         """ Assigns a code book (weights vector of the winning neuron) to each sample in data. """
         q = zeros(data.shape)
+        mask = zeros(data.shape)
         for i,x in enumerate(data):
-            q[i] = self.weights[self.winner(x)]
-        return q
-
-
+            # if all the values are masked this is not an interesting value
+            if not all([val is ma.masked for val in x]):
+                q[i] = self.weights[self.winner(x)]
+            else:
+                mask[i] = True
+        print "\n"
+        return ma.array(q, mask=mask)
+        
     def random_weights_init(self,data):
+        """ Create an index of cases where all the pixels have a value """
+        validPts = self.pick_valid_random_point(data)
+        
         """ Initializes the weights of the SOM picking random samples from data """
         it = nditer(self.activation_map, flags=['multi_index'])
+
         while not it.finished:
-            self.weights[it.multi_index] = data[int(self.random_generator.rand()*len(data)-1)]
-            self.weights[it.multi_index] = self.weights[it.multi_index]/linalg.norm(self.weights[it.multi_index])
+            ptInd = int(self.random_generator.rand()*len(validPts)-1)
+            self.weights[it.multi_index] = data[validPts[ptInd]]
+            self.weights[it.multi_index] = self.weights[it.multi_index] / linalg.norm(self.weights[it.multi_index])
             it.iternext()
+
+    def pick_valid_random_point(self,data):
+        validPts = []
+        for i,val in enumerate(data):
+            if not any([x is ma.masked for x in val]):
+                validPts.append(i) 
+        print "\n"
+        return validPts
 
     def train_random(self,data,num_iteration):        
         """ Trains the SOM picking samples at random from data """
         self._init_T(num_iteration)        
+        validPts = self.pick_valid_random_point(data)
+
         for iteration in range(num_iteration):
-            rand_i = int(round(self.random_generator.rand()*len(data)-1)) # pick a random sample
-            self.update(data[rand_i],self.winner(data[rand_i]),iteration)
+            ptInd = int(self.random_generator.rand()*len(validPts)-1)
+            rand_point = data[validPts[ptInd]]
+            self.update(rand_point,self.winner(rand_point),iteration)
+        print "\n"
 
     def train_batch(self,data,num_iteration):
         """ Trains using all the vectors in data sequentially """
