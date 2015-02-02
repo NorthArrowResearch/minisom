@@ -1,6 +1,7 @@
 from numpy import sqrt,sqrt,array,unravel_index,nditer,linalg,random,subtract,ma,power,exp,pi,zeros,arange,outer,meshgrid
 from collections import defaultdict
 from warnings import warn
+from progress.bar import Bar
 
 """
     Minimalistic implementation of the Self Organizing Maps (SOM).
@@ -94,12 +95,14 @@ class MiniSom:
         """ Assigns a code book (weights vector of the winning neuron) to each sample in data. """
         q = zeros(data.shape)
         mask = zeros(data.shape)
+        bar = Bar('Quantizing: ', suffix='%(percent)d%%', max=len(data))
         for i,x in enumerate(data):
             # if all the values are masked this is not an interesting value
             if not all([val is ma.masked for val in x]):
                 q[i] = self.weights[self.winner(x)]
             else:
                 mask[i] = True
+            bar.next()
         print "\n"
         return ma.array(q, mask=mask)
         
@@ -118,9 +121,11 @@ class MiniSom:
 
     def pick_valid_random_point(self,data):
         validPts = []
+        bar = Bar('Picking Random Starting Points: ', suffix='%(percent)d%%', max=len(data))
         for i,val in enumerate(data):
             if not any([x is ma.masked for x in val]):
                 validPts.append(i) 
+            bar.next()
         print "\n"
         return validPts
 
@@ -129,7 +134,9 @@ class MiniSom:
         self._init_T(num_iteration)        
         validPts = self.pick_valid_random_point(data)
 
+        bar = Bar('Random Training: ', suffix='%(percent)d%%', max=num_iteration)
         for iteration in range(num_iteration):
+            bar.next()
             ptInd = int(self.random_generator.rand()*len(validPts)-1)
             rand_point = data[validPts[ptInd]]
             self.update(rand_point,self.winner(rand_point),iteration)
@@ -139,7 +146,9 @@ class MiniSom:
         """ Trains using all the vectors in data sequentially """
         self._init_T(len(data)*num_iteration)
         iteration = 0
+        bar = Bar('Batch Training: ', suffix='%(percent)d%%', max=num_iteration)
         while iteration < num_iteration:
+            bar.next()
             idx = iteration % (len(data)-1)
             self.update(data[idx],self.winner(data[idx]),iteration)
             iteration += 1
